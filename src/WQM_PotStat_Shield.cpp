@@ -93,15 +93,15 @@ SoftwareSerial Serial_BT(2,3);
 
 // WQM Variables
 Adafruit_ADS1115 WQM_adc1(0x48);
-Adafruit_ADS1115 WQM_adc2(0x49);
+//Adafruit_ADS1115 WQM_adc2(0x49);
 
 bool ClSwState = false;
 
-float voltage_pH = 0.0; //Voltage in mV
+//float voltage_pH = 0.0; //Voltage in mV
 float current_Cl = 0.0; //Current in nA
-float temperature = 0.0; //Temperature in deg. C
-float V_temp = 0.0; //Voltage for temperature calculation
-float voltage_alkalinity = 0.0; //Voltage for alkalinity calculation
+//float temperature = 0.0; //Temperature in deg. C
+//float V_temp = 0.0; //Voltage for temperature calculation
+//float voltage_alkalinity = 0.0; //Voltage for alkalinity calculation
 
 //Current time in seconds since start of free Cl measurement collection (milliseconds)
 long switchTimeACC = 0;
@@ -286,9 +286,9 @@ void setup() {
     pinMode(WQM_ClSwEn, OUTPUT);
     wqm_led(ON);
     WQM_adc1.begin();
-    WQM_adc2.begin();
+    //WQM_adc2.begin();
     WQM_adc1.setGain(GAIN_TWO); // set PGA gain to 2 (LSB=0.0625 mV, FSR=2.048)
-    WQM_adc2.setGain(GAIN_FOUR); // set PGA gain to 4 (LSB=0.03125 mV, FSR=1.024)
+   // WQM_adc2.setGain(GAIN_FOUR); // set PGA gain to 4 (LSB=0.03125 mV, FSR=1.024)
     sendInfo("WQM Setup complete");
     //Run WQM only
     delay(1000);
@@ -474,29 +474,7 @@ void loop()
     digitalWrite(EXT_LED,ClSwState);
   }
 
-  /*
-     Respond to serial communications
-  */
-  /*
-  if (Serial.available() > 0) {
-    charRcvd = Serial.read();
-    //check if experiment started
-    if (expStarted == 0 && charRcvd == '!') {
-      //handshake received, reply and prepare to read command
-      Serial.print("C");
-      led(ON);
-      //receive and parse command
-      receiveCmd();
-    } else if (expStarted == 0 && charRcvd == '?') {
-      startExperimentWQM();
-    } else if (expStarted == 0 && true && charRcvd == 'r') {//TODO: delete
-      startExperiment();
-    } else if (charRcvd == 'x') {
-      finishExperiment();
-      sendInfo("Experiment Stopped");
-    }
-  }
-  */
+
 
 }
 /*
@@ -505,7 +483,7 @@ void loop()
 /*
  * Receives potentiostat experiment command from serial port
  * Parses data and starts experiment if valid
- */
+
 void receiveCmd() {
   boolean receiving = true;
   boolean valid = false; //command has valid prefix/suffix chars
@@ -557,7 +535,7 @@ void receiveCmd() {
   else if (!valid) sendError("Received command not valid");
   led(OFF);
 }
-
+ */
 /* Extract parameters from run command char array
 
     References global current experiment config 'e'
@@ -565,6 +543,7 @@ void receiveCmd() {
     returns: success status - function is successful if parameters
     were extraced, converted to experiment config, and config is valid
 */
+/*
 boolean parseRunCmd(char *cmd, int ncmd) {
 
   int iStart, iEnd;
@@ -802,6 +781,7 @@ boolean checkParams (int e, int np, long * par) {
    e.syncSamplingEN = true, e.tSyncSample = 0 (N/A), e.vSlope[] = 0
 
 */
+/*
 boolean setConfig (int experiment, long * par) {
 
   switch (experiment) {
@@ -844,6 +824,7 @@ boolean setConfig (int experiment, long * par) {
   }
   return true;
 }
+*/
 //Add error prefix text to message and send to user
 size_t sendError(String s) {
   //return 0;
@@ -1043,6 +1024,7 @@ void flashLed(byte n, unsigned int d) {
 
 
 //Select feedback resistance based on gain selection (0-7)
+
 void setGain(byte n) {
   //Set feedback resistance based on selection
   switch (n / 2)
@@ -1119,7 +1101,7 @@ void programFail(byte code) {
   }
 }
 /* clear all elements of experiment structure
-*/
+ 
 void clearExp() {
   e.tClean = 0UL;
   e.vClean = 0.0;
@@ -1139,6 +1121,8 @@ void clearExp() {
 }
 
 //default LSV experiment (debug)
+
+/*
 void defLSVExp() {
   e.tClean = 000000UL;
   e.vClean = 0.0;
@@ -1219,7 +1203,7 @@ void printExp() {
   Serial.println(String("tSyncSample: " + String(e.tSyncSample)));
   Serial.println(String("gain: " + String(e.gain)));
 }
-
+*/
 //WQM FUNCTIONS:
   void startExperimentWQM() {
     flashLed(4, 150);
@@ -1235,30 +1219,30 @@ void printExp() {
     // read from the ADC, and obtain a sixteen bits integer as a result
     if (WQM_Present) {
       WQM_adc1_diff_2_3 = WQM_adc1.readADC_Differential_2_3();
+     // delay(5);
+     // WQM_adc2_diff_0_1 = WQM_adc2.readADC_Differential_0_1();
       delay(5);
-      WQM_adc2_diff_0_1 = WQM_adc2.readADC_Differential_0_1();
-      delay(5);
-      WQM_adc1_diff_0_1 = WQM_adc1.readADC_Differential_0_1();
-      delay(5);
-      WQM_adc2_diff_2_3 =  WQM_adc2.readADC_Differential_2_3();
+    //  WQM_adc1_diff_0_1 = WQM_adc1.readADC_Differential_0_1();
+    //  delay(5);
+    //  WQM_adc2_diff_2_3 =  WQM_adc2.readADC_Differential_2_3();
 
    
     } else {
       //Simulated ADC signals for when not connected to WQM board (temp) (fudges random data)
-      WQM_adc1_diff_0_1 = 2000 + random(100);
+    //  WQM_adc1_diff_0_1 = 2000 + random(100);
       if (ClSwState) {
         WQM_adc1_diff_2_3 = -2000 + random(100);
       } else {
         WQM_adc1_diff_2_3 = 0;
       }
-      WQM_adc2_diff_0_1 = 2000 + random(100);
-      WQM_adc2_diff_2_3 = 2000 + random(100);
+      //WQM_adc2_diff_0_1 = 2000 + random(100);
+     // WQM_adc2_diff_2_3 = 2000 + random(100);
 
     }
-    voltage_pH = WQM_adc1_diff_0_1 * 0.0625; // in mV
+    //voltage_pH = WQM_adc1_diff_0_1 * 0.0625; // in mV
     current_Cl = -WQM_adc1_diff_2_3 * 0.0625 / 0.0255; // in nA, feedback resistor = 500k
-    V_temp = WQM_adc2_diff_0_1 * 0.03125; // in mV
-    voltage_alkalinity = WQM_adc2_diff_2_3 * 0.0625 / 0.0255; // in mV
+    //V_temp = WQM_adc2_diff_0_1 * 0.03125; // in mV
+   // voltage_alkalinity = WQM_adc2_diff_2_3 * 0.0625 / 0.0255; // in mV
   }
 
   //Send WQM meas. values over serial port
@@ -1266,14 +1250,14 @@ void printExp() {
 
     // Send data to Serial port
     Serial.print(" ");
-    Serial.print(V_temp, 4);
-    Serial.print(" ");
-    Serial.print(voltage_pH, 4);
-    Serial.print(" ");
+   // Serial.print(V_temp, 4);
+    //Serial.print(" ");
+    //Serial.print(voltage_pH, 4);
+    //Serial.print(" ");
     Serial.print(current_Cl, 4);
     Serial.print(" ");
-    Serial.print(voltage_alkalinity, 4);  //Make changes in app to read the proper order #TODO
-    Serial.print(" ");
+    //Serial.print(voltage_alkalinity, 4);  //Make changes in app to read the proper order #TODO
+    //Serial.print(" ");
     Serial.print((float)switchTimeACC / 1000.0, 1);  //Turns off the switch for free chlorine
     Serial.print(" ");
     if (ClSwState) {
