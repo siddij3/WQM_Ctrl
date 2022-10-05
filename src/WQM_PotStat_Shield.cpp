@@ -7,53 +7,6 @@
 //Project files
 #include "WQM_PotStat_Shield.h"
 
-//TODO: Define DPV parameters, set up experiment, find use for PS leds
-
-/*
-   PotStat command example:
-   <R%SR:60%G:2%E:1%EP:100,100,0,0,0,-200,800,100,3,%/>
-
-   '<' = Command start char
-   'R' = Run experiment
-   %SR:# = Sample rate, integer between MIN_SAMPLE_RATE and MAX_SAMPLE_RATE
-   %G:# = Gain Setting (0-7): Determines TIA feedback resistance and ADC PGA setting:
-
-   0: RG = 500, PGA = 4X, 2000uA
-   1: RG = 500, PGA = 16X, 500uA
-   2: RG = 10k, PGA = 4X, 100uA
-   3: RG = 10k, PGA = 16X, 25uA
-   4: RG = 200k, PGA = 4X, 5uA
-   5: RG = 200k, PGA = 16X, 1.25uA
-   6: RG = 4M, PGA = 4X, 250nA
-   7: RG = 4M, PGA = 16X, 63nA
-
-   %E:# = Experiment (1 or 2), 1 = CSV/LSV 2 = DPV (only CSV currently configured)
-
-   %EP:#,#,...#, = Experiment parameters, varies by selected experiment
-
-   CSV:
-   P0 = Cleaning time
-   P1 = Cleaning potential
-   P2 = Deposition time
-   P3 = Deposition potential
-   P4 = Start Voltage, mV
-   P5 = Vertex 1, mV
-   P6 = Vertex 2, mV
-   P7 = Slope, mV/S
-   P8 = # of scans
-
-   DPV:
-   P0 = Cleaning time
-   P1 = Cleaning potential
-   P2 = Deposition time
-   P3 = Deposition potential
-   P4 = Start/Initial (mV)
-   P5 = Stop/Final (mV)
-   P6 = Step, mV
-   P7 = Pulse Amplitude, mV
-   P8 = Pulse Width
-   P9 = Pulse Period
-*/
 
 /* IO
    Name Pin Function
@@ -89,10 +42,10 @@ boolean WQM_Present = false; //WQM Shield Present
 // GND  <-->  GND
 // TxD  <-->  pin D2
 // RxD  <-->  pin D3
-SoftwareSerial Serial_BT(2,3);
+SoftwareSerial Serial_BT(BT_RX,BT_TX);
 
 // WQM Variables
-Adafruit_ADS1115 WQM_adc1(0x48);
+Adafruit_ADS1115 WQM_adc1(0x49);
 //Adafruit_ADS1115 WQM_adc2(0x49);
 
 bool ClSwState = false;
@@ -226,10 +179,10 @@ void setup() {
  // PS_Present = digitalRead(PS_BrdPresent) ? false : true;
 
   delay(5000);
-  //Initialize serial port - setup BLE shield
+  //Initialize Serial port - setup BLE shield
     Serial.begin(9600);
     while (!Serial) {
-      ; // wait for serial port to connect. Needed for native USB port only
+       // wait for serial port to connect. Needed for native USB port only
     }
     Serial.println("Master Baud Rate: = 9600");
     Serial.println("Setting BLE shield comms settings, name/baud rate(115200)");
@@ -298,7 +251,7 @@ void setup() {
   }
   delay(100);
  
- // digitalWrite(PS_LED1, OFF);
+   digitalWrite(PS_LED1, OFF);
   //digitalWrite(PS_LED2, OFF);
   wqm_led(OFF);
 
@@ -458,6 +411,7 @@ void loop()
     //Serial.println(tScratch);
   }
   */
+ 
   //WQM_startADC flag set  (set from interrupt)
   if (WQM_startADC) {
     getMeasurementsWQM();
@@ -480,203 +434,7 @@ void loop()
 /*
  * FUNCTIONS
  */
-/*
- * Receives potentiostat experiment command from serial port
- * Parses data and starts experiment if valid
 
-void receiveCmd() {
-  boolean receiving = true;
-  boolean valid = false; //command has valid prefix/suffix chars
-  unsigned long rxStart = millis();
-
-  char cmd[MAX_CMD_LENGTH];
-  memset(cmd, 0, sizeof(cmd));
-  int nReceived = -1;
-  Serial.setTimeout(2000);
-  while (receiving && (millis() - rxStart) < 20000) {
-    if (Serial.available() > 0) {
-      //data has arrived, check for leading/start char ('<')
-      if (Serial.read() == '<') {
-        //leading char correct, check remaining chars
-        nReceived = Serial.readBytesUntil('>', cmd, MAX_CMD_LENGTH);
-        if (nReceived > 0 && cmd[nReceived - 1] == '/' ) {
-          //command start/stop chars valid; parse cmd data
-          //cmd[nReceived - 1] = 0;
-          valid = true;
-          //determine command type
-          switch (cmd[0]) {
-            case 'R':
-              if (parseRunCmd(cmd, nReceived)) {
-                startExperiment();
-              } else {
-                sendError("Could not parse command / command invalid");
-              }
-              break;
-
-            default:
-              //Command not recognized
-              sendError("Command not recognized");
-              break;
-
-          }
-          receiving = false;
-        } else {
-          //read timed out or invalid cmd stop char
-          receiving = false;
-        }
-
-      } else {
-        //leading char not correct
-        receiving = false;
-      }
-    }
-  }
-  if (receiving) sendError("Command not received");
-  else if (!valid) sendError("Received command not valid");
-  led(OFF);
-}
- */
-/* Extract parameters from run command char array
-
-    References global current experiment config 'e'
-
-    returns: success status - function is successful if parameters
-    were extraced, converted to experiment config, and config is valid
-*/
-/*
-boolean parseRunCmd(char *cmd, int ncmd) {
-
-  int iStart, iEnd;
-  int iDelim, iDelimPrev;
-  long value = 0;
-  long params[10]; //array for holding parsed experiment parameters
-  int nParams; //number of parsed parameters
-
-  memset(params, 0, sizeof(params));
-
-
-  //*** Sample Rate
-  //look for "%SR:" in command (sample rate)
-  iStart = findSubstring(0, "%SR:", 4, cmd, ncmd);
-  if (iStart < 0) return false; // substring not found
-  //find enclosing '%'
-  iEnd = findSubstring(iStart, "%", 1, cmd, ncmd);
-  if (iEnd < 0) return false; // substring not found
-  //format chars cmd[i] for i = (iStart + 1) to (iEnd)  into sample rate (int)
-  if (!convInt(&value, cmd, iStart + 1, iEnd - 1)) return false; //conversion not successful
-  //check if extracted sample rate in valid range:
-  if (value >= MIN_SAMPLE_RATE && value <= MAX_SAMPLE_RATE) {
-    e.sampRate = value;
-  } else {
-    sendError("Sample Rate out of range");
-    return false; //out of range
-  }
-
-  //*** Gain
-  //look for "%G:" in command (gain)
-  iStart = findSubstring(0, "%G:", 3, cmd, ncmd);
-  if (iStart < 0) return false; // substring not found
-  //find enclosing '%'
-  iEnd = findSubstring(iStart, "%", 1, cmd, ncmd);
-  if (iEnd < 0) return false; // substring not found
-  //format chars cmd[i] for i = (iStart + 1) to (iEnd)  into value (long)
-  if (!convInt(&value, cmd, iStart + 1, iEnd - 1)) return false; //conversion not successful
-  //check if extracted gain in valid range:
-  if (value >= MIN_GAIN && value <= MAX_GAIN) {
-    e.gain = value;
-    setGain(e.gain);
-  } else {
-    sendError("Gain out of range");
-    return false; //out of range
-  }
-
-  //*** Experiment Parameters
-  //look for "%EP:" in command (exp. params)
-  iStart = findSubstring(0, "%EP:", 4, cmd, ncmd);
-  if (iStart < 0) return false; // substring not found
-  //find enclosing '%'
-  iEnd = findSubstring(iStart, "%", 1, cmd, ncmd);
-  if (iEnd < 0) return false; // substring not found
-  nParams = 0;
-  iDelimPrev = iStart;
-  //extract individual parameters
-  for (int i = 0; i < 10; i++) {
-    iDelim = findSubstring(iDelimPrev + 1, ",", 1, cmd, ncmd);
-    if (iDelim < 0) return false; //delimiter not found
-    if (!convInt(&params[i], cmd, iDelimPrev + 1, iDelim - 1)) return false; //return if conversion not successful
-    nParams++;
-    if (iDelim == iEnd - 1) break; //last delimiter
-    iDelimPrev = iDelim;
-  }
-
-  //*** Experiment
-  //look for "%E:" in command (experiment type)
-  iStart = findSubstring(0, "%E:", 3, cmd, ncmd);
-  if (iStart < 0) return false; // substring not found
-  //find enclosing '%'
-  iEnd = findSubstring(iStart, "%", 1, cmd, ncmd);
-  if (iEnd < 0) return false; // substring not found
-  //format chars cmd[i] for i = (iStart + 1) to (iEnd)  into value (long)
-  if (!convInt(&value, cmd, iStart + 1, iEnd - 1)) return false; //conversion not successful
-  //check if extracted experiment is valid:
-  if (value == EXP_CSV) {
-    //valid experiment
-    if (checkParams(value, nParams, params) && setConfig(value, params)) {
-      //params valid and experiment configuration set
-      return true;
-    } else {
-      return false;
-    }
-  } else if (value == EXP_DPV) {
-    //valid experiment
-    if (checkParams(value, nParams, params) && setConfig(value, params)) {
-      //params valid and experiment configuration set
-      return true;
-    } else {
-      return false;
-    }
-  } else {
-    sendError("Selected experiment invalid/not supported");
-    return false; //out of range
-  }
-  return true;
-}
-
-/* Finds substring within char array starting from a provided index
-   inputs:
-   @param   start   starting index to begin search
-   @param   *sub    pointer to first element of substring char array
-   @param   nsub    length of substring array
-   @param   *str    pointer to first element of string to search char array
-   @param   nstr    length of string array
-
-   returns: index within string (searched) array
-   corresponding to location of the END of substring
-*/
-int findSubstring(int start, char *sub, int nsub, char *str, int nstr) {
-
-  // if either param <1 return unsuccseful
-  if (nstr < 1 || nsub < 1) return -1;
-
-  int index = -1;
-
-  //iterate over string
-  for (int i = start; i < (nstr - nsub) + 1;  i++ ) {
-    //iterate over substring
-    for (int j = 0; j < nsub; j++) {
-      //break substring loop if not equal
-      if ((sub[j] != str[i + j])) break;
-      //check for complete match
-      if (j == (nsub - 1)) {
-        //substring found
-        index = i + j;
-        return index;
-      }
-    }
-  }
-
-  return -1;
-}
 
 /* Convert a series (array) of chars into an integer
  *
@@ -746,84 +504,10 @@ boolean checkParams (int e, int np, long * par) {
 }
 
 /*
-   Sets experiment settings based on received parameters
-   e.sampRate and e.gain set outside function
-
-   CV/LSV:
-   PAR#   DESC.           NOTES
-   0      Clean T (us)    e.tClean=par[0];
-   1      Clean V (mV)    e.vClean=par[1];
-   2      Dep. T (us)     e.tDep=par[2];
-   3      Dep. V (mV)     e.vDep=par[3];
-   4      Start (mV)      determines tOffset from Vertex 1 and Slope: e.tOffset = 1e6*abs((par[5] - par[4])/par[7]);
-   5      Vertex 1 (mV)   e.vStart[0] = par[5];
-   6      Vertex 2 (mV)   e.vStart[1] = par[6];
-   7      Slope (mV/s)    e.vSlope[] =  par[7]/1000000000; (sign based on vStart[0],vStart[1])
-   8      Scans           e.cycles = par[8];
-
-   tSwitch determined from Vertex 2 and Slope: e.tSwitch = 1e6*abs(par[6] - par[5])/par[7]; e.tCycle = 2*e.tSwitch;
-
-   e.syncSamplingEN = false, e.tSyncSample = 0 (N/A), e.offset = 0 (N/A)
-
-   DPV:
-   PAR#   DESC.               NOTES
-   0      Clean T (us)        e.tClean=par[0];
-   1      Clean V (mV)        e.vClean=par[1]/1000;
-   2      Dep. T (us)         e.tDep=par[2];
-   3      Dep. V (mV)         e.vDep=par[3]/1000;
-   4      Start (mV)          e.vStart[0] = par[4];
-   5      Stop (mV)           determines # cycles from Start and Step: e.cycles = (par[4]-par[5])/par[6];
-   6      Step (mV)
-   7      Pulse Amp(mV)       e.vStart[1] = par[7] - e.vStart[0];
-   8      Pulse Width (ms)    e.tSwitch = (par[9]-par[8])*1e3
-   9      Pulse Period (ms)   e.tCycle = par[9]*1e3
-
-   e.syncSamplingEN = true, e.tSyncSample = 0 (N/A), e.vSlope[] = 0
 
 */
 /*
-boolean setConfig (int experiment, long * par) {
 
-  switch (experiment) {
-    case EXP_CSV:
-      e.tClean = par[0];
-      e.vClean = float(par[1] / 1000.0);
-      e.tDep = par[2];
-      e.vDep = float(par[3] / 1000.0);
-      e.tOffset = abs((par[5] - par[4]) * 1e6 / par[7]);
-      e.vStart[0] = float(par[5] / 1000.0);
-      e.vStart[1] = float(par[6] / 1000.0);
-      e.vSlope[0] = e.vStart[1] > e.vStart[0] ? float(par[7] * 1E-9) : float(par[7] * -1E-9);
-      e.vSlope[1] = e.vSlope[0] * -1;
-      e.tSwitch = abs(par[6] - par[5]) * 1e6 / par[7];
-      e.tCycle = 2 * e.tSwitch;
-      e.cycles = par[8];
-      e.syncSamplingEN = false;
-      e.offset = 0;
-      break;
-
-    case EXP_DPV:
-      e.tClean = par[0];
-      e.vClean = float(par[1] / 1000.0);
-      e.tDep = par[2];
-      e.vDep = float(par[3] / 1000.0);
-      e.tOffset = 0.0;
-      e.vStart[0] = float(par[4] / 1000.0);
-      e.vStart[1] = float(par[7] / 1000.0) - e.vStart[0];
-      e.vSlope[0] = 0.0;
-      e.vSlope[1] = 0.0;
-      e.tCycle = par[9] * 1e3;
-      e.tSwitch = (par[9] - par[8]) * 1e3;
-      e.cycles = (par[4] - par[5]) / par[6];
-      e.syncSamplingEN = true;
-      e.offset = float(par[6] / 1000.0);
-      break;
-
-    default:
-      return false;
-  }
-  return true;
-}
 */
 //Add error prefix text to message and send to user
 size_t sendError(String s) {
@@ -1100,110 +784,7 @@ void programFail(byte code) {
     delay(2500);
   }
 }
-/* clear all elements of experiment structure
- 
-void clearExp() {
-  e.tClean = 0UL;
-  e.vClean = 0.0;
-  e.tDep = 0UL;
-  e.vDep = 0.0;
-  e.tSwitch = 0UL;
-  e.tOffset = 0UL;
-  e.vStart[0] = 0.0;
-  e.vStart[1] = 0.0;
-  e.vSlope[0] = 0.0;
-  e.vSlope[1] = 0.0;
-  e.tCycle = 0UL;
-  e.offset = 0.0;
-  e.cycles = 0;
-  e.syncSamplingEN = false;
-  e.tSyncSample = 0UL;
-}
 
-//default LSV experiment (debug)
-
-/*
-void defLSVExp() {
-  e.tClean = 000000UL;
-  e.vClean = 0.0;
-  e.tDep = 500000UL;
-  e.vDep = -0.5;
-  e.tSwitch = 40000000UL;
-  e.tOffset = 00000000UL;
-  e.vStart[0] = -1.0;
-  e.vStart[1] = 1.0;
-  e.vSlope[0] = 0.00000005;
-  e.vSlope[1] = -0.00000005;
-  e.tCycle = 40000000UL;
-  e.offset = 0.0;
-  e.cycles = 1;
-  e.sampRate = 30;
-  e.syncSamplingEN = false;
-  e.tSyncSample = 0UL;
-  e.gain = 0;
-}
-//default CV experiment (debug)
-void defCVExp() {
-  e.tClean = 000000UL;
-  e.vClean = 0.0;
-  e.tDep = 2000000UL;
-  e.vDep = 0;
-  e.tSwitch = 20000000UL;
-  e.tOffset = 0UL;
-  e.vStart[0] = -0.2;
-  e.vStart[1] = 0.8;
-  e.vSlope[0] = 0.00000005;
-  e.vSlope[1] = -0.00000005;
-  e.tCycle = 40000000UL;
-  e.offset = 0.0;
-  e.cycles = 2;
-  e.sampRate = 10;
-  e.syncSamplingEN = false;
-  e.tSyncSample = 0UL;
-  e.gain = 2;
-}
-//default DPV experiment (debug)
-void defDPVExp() {
-  e.tClean = 0UL;
-  e.vClean = -0.5;
-  e.tDep = 300000UL;
-  e.vDep = 0.0;
-  e.tSwitch = 40000UL;
-  e.tOffset = 0UL;
-  e.vStart[0] = 0.2;
-  e.vStart[1] = 0.0;
-  e.vSlope[0] = 0.0;
-  e.vSlope[1] = 0.0;
-  e.tCycle = 100000UL;
-  e.offset = 0.1;
-  e.cycles = 20;
-  e.sampRate = 30;
-  e.syncSamplingEN = true;
-  e.tSyncSample = e.tCycle - SYNC_OFFSET;
-  e.gain = 2;
-}
-
-//Print current experiment settings to serial port
-void printExp() {
-  Serial.println(String("tClean: " + String(e.tClean)));
-  Serial.println(String("vClean: " + String(e.vClean)));
-  Serial.println(String("tDep: " + String(e.tDep)));
-  Serial.println(String("vDep: " + String(e.vDep)));
-  Serial.println(String("tSwitch: " + String(e.tSwitch)));
-  Serial.println(String("tOffset: " + String(e.tOffset)));
-  Serial.println(String("vStart[0]: " + String(e.vStart[0])));
-  Serial.println(String("vStart[1]: " + String(e.vStart[1])));
-  Serial.println(String("vSlope[0]*1E9: " + String(e.vSlope[0]*1E9)));
-  Serial.println(String("vSlope[1]*1E9: " + String(e.vSlope[1]*1E9)));
-  Serial.println(String("tCycle: " + String(e.tCycle)));
-  Serial.println(String("offset: " + String(e.offset)));
-  Serial.println(String("cycles: " + String(e.cycles)));
-  Serial.println(String("sampRate: " + String(e.sampRate)));
-  Serial.println(String("syncSamplingEN: " + String(e.syncSamplingEN)));
-  Serial.println(String("tSyncSample: " + String(e.tSyncSample)));
-  Serial.println(String("gain: " + String(e.gain)));
-}
-*/
 //WQM FUNCTIONS:
   void startExperimentWQM() {
     flashLed(4, 150);

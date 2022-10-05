@@ -7,6 +7,10 @@
 #define WQM_ClSwEn 5
 #define WQM_BrdPresent 11
 
+#define BT_RX 2
+#define BT_TX 3
+
+
 #define PS_LED1 6
 #define PS_LED2 7
 #define PS_MUX0 8
