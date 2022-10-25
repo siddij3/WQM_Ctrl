@@ -7,6 +7,53 @@
 //Project files
 #include "WQM_PotStat_Shield.h"
 
+//TODO: Define DPV parameters, set up experiment, find use for PS leds
+
+/*
+   PotStat command example:
+   <R%SR:60%G:2%E:1%EP:100,100,0,0,0,-200,800,100,3,%/>
+
+   '<' = Command start char
+   'R' = Run experiment
+   %SR:# = Sample rate, integer between MIN_SAMPLE_RATE and MAX_SAMPLE_RATE
+   %G:# = Gain Setting (0-7): Determines TIA feedback resistance and ADC PGA setting:
+
+   0: RG = 500, PGA = 4X, 2000uA
+   1: RG = 500, PGA = 16X, 500uA
+   2: RG = 10k, PGA = 4X, 100uA
+   3: RG = 10k, PGA = 16X, 25uA
+   4: RG = 200k, PGA = 4X, 5uA
+   5: RG = 200k, PGA = 16X, 1.25uA
+   6: RG = 4M, PGA = 4X, 250nA
+   7: RG = 4M, PGA = 16X, 63nA
+
+   %E:# = Experiment (1 or 2), 1 = CSV/LSV 2 = DPV (only CSV currently configured)
+
+   %EP:#,#,...#, = Experiment parameters, varies by selected experiment
+
+   CSV:
+   P0 = Cleaning time
+   P1 = Cleaning potential
+   P2 = Deposition time
+   P3 = Deposition potential
+   P4 = Start Voltage, mV
+   P5 = Vertex 1, mV
+   P6 = Vertex 2, mV
+   P7 = Slope, mV/S
+   P8 = # of scans
+
+   DPV:
+   P0 = Cleaning time
+   P1 = Cleaning potential
+   P2 = Deposition time
+   P3 = Deposition potential
+   P4 = Start/Initial (mV)
+   P5 = Stop/Final (mV)
+   P6 = Step, mV
+   P7 = Pulse Amplitude, mV
+   P8 = Pulse Width
+   P9 = Pulse Period
+*/
 
 /* IO
    Name Pin Function
@@ -42,19 +89,20 @@ boolean WQM_Present = false; //WQM Shield Present
 // GND  <-->  GND
 // TxD  <-->  pin D2
 // RxD  <-->  pin D3
-SoftwareSerial Serial_BT(BT_RX,BT_TX);
+SoftwareSerial Serial_BT(2,3);
 
 // WQM Variables
-Adafruit_ADS1115 WQM_adc1(0x49);
+Adafruit_ADS1115 WQM_adc1(0x49);  // THIS IS THE ONE
 //Adafruit_ADS1115 WQM_adc2(0x49);
 
 bool ClSwState = false;
 
-//float voltage_pH = 0.0; //Voltage in mV
+float voltage_pH = 0.0; //Voltage in mV
 float current_Cl = 0.0; //Current in nA
-//float temperature = 0.0; //Temperature in deg. C
-//float V_temp = 0.0; //Voltage for temperature calculation
-//float voltage_alkalinity = 0.0; //Voltage for alkalinity calculation
+float fVoltageAdc = 0.0; //Voltage in mV
+float temperature = 0.0; //Temperature in deg. C
+float V_temp = 0.0; //Voltage for temperature calculation
+float voltage_alkalinity = 0.0; //Voltage for alkalinity calculation
 
 //Current time in seconds since start of free Cl measurement collection (milliseconds)
 long switchTimeACC = 0;
@@ -62,7 +110,7 @@ long switchTimeACC = 0;
 long switchTimePRE = CL_SW_ON_TIME + CL_MEASURE_TIME;
 
 int16_t WQM_adc1_diff_0_1;  // pin0 - pin1, raw ADC val
-int16_t WQM_adc1_diff_2_3;  // pin2 - pin3, raw ADC val
+int16_t WQM_adc1_diff_2_3;  // pin2 - pin3, raw ADC val this one
 int16_t WQM_adc2_diff_0_1;  // pin0 - pin1, raw ADC val
 int16_t WQM_adc2_diff_2_3;  // pin0 - pin1, raw ADC val
 
@@ -180,23 +228,23 @@ void setup() {
 
   delay(5000);
   //Initialize Serial port - setup BLE shield
-    Serial.begin(9600);
+    Serial_BT.begin(9600);
     while (!Serial) {
        // wait for serial port to connect. Needed for native USB port only
     }
-    Serial.println("Master Baud Rate: = 9600");
-    Serial.println("Setting BLE shield comms settings, name/baud rate(115200)");
+    Serial_BT.println("Master Baud Rate: = 9600");
+    Serial_BT.println("Setting BLE shield comms settings, name/baud rate(115200)");
     delay(500);
-    Serial.print("AT+NAMEIMWQMS"); //Set board name
+    Serial_BT.print("AT+NAMEIMWQMS"); //Set board name
     delay(250);
-    Serial.print("AT+BAUD4"); //Set baud rate to 115200 on BLE Shield
+    Serial_BT.print("AT+BAUD4"); //Set baud rate to 115200 on BLE Shield
     delay(250);
-    Serial.println();
-    Serial.println("Increasing MCU baud rate to 115200");
+    Serial_BT.println();
+    Serial_BT.println("Increasing MCU baud rate to 115200");
     delay(500);
-    Serial.begin(9600);
+    Serial_BT.begin(115200);
     delay(200);
-    Serial.println("Master Baud Rate: = 115200");
+    Serial_BT.println("Master Baud Rate: = 115200");
 
   //Initialize I2C
   Wire.begin(); //Start I2C
@@ -217,16 +265,12 @@ void setup() {
     digitalWrite(PS_LED2, ON);
     digitalWrite(PS_WE_SwEn, ON); //todo: update to only turn on during experiment
     PS_adc1.begin();
-
     //default to gain range 2 (10k, 4X PGA gain)
     setGain(2);
-
     // Reset DAC output
     writeDAC(DACVAL0); //MAX5217
-
     clearExp(); //clear experiment config
     defCVExp(); //set default exp config
-
     sendInfo("PotStat Setup complete");
   } else {
     sendInfo("No PotStat board detected");
@@ -348,7 +392,7 @@ void loop()
 
     } else {
       //experiment completed
-      Serial.println("no");
+      Serial_BT.println("no");
       finishExperiment();
       sendInfo("Experiment Complete");
     }
@@ -356,61 +400,11 @@ void loop()
 
     //execution time:
     tScratch = micros() - tScratch;
-    //Serial.print("Start DAC Total et: ");
-    //Serial.println(tScratch);
+    //Serial_BT.print("Start DAC Total et: ");
+    //Serial_BT.println(tScratch);
   }
-  //PS_startADC flag set  (set from interrupt (CSV) or after DAC(DPV))
- /* if (PS_startADC) {
-    tScratch = micros();
+  
 
-    if (!PS_Present && MCU_ONLY) {
-      iIn = vOut;
-    } else {
-      PS_adc1_diff_0_1 = PS_adc1.readADC_Differential_0_1();
-      vIn = PS_adc1_diff_0_1 * 0.03125; // in mV
-      iIn = vIn / rGain; // in uA
-    }
-
-    //**** Send new data message
-
-    if (PS_STD_MSG){ /* Standard raw data msg */
-      //Interface is expecting signed 32bit integer so data
-      //must be padded with leading 0's or 1's depending on sign
-    /*  uint8_t fillBits = 0;
-      if (PS_adc1_diff_0_1 < 0) fillBits = 0XFF;
-
-      Serial.write('B'); //signify new data follows
-      Serial.write(13); //cr
-      Serial.flush();
-      //Send Data
-
-      //DAC output
-      Serial.write((uint8_t)(dacOut & 0XFF));
-      Serial.write((uint8_t)(dacOut >> 8));
-      //Serial.print(dacOut);
-
-      //ADC input
-      Serial.write((uint8_t)(PS_adc1_diff_0_1 & 0XFF));
-      Serial.write((uint8_t)(PS_adc1_diff_0_1 >> 8));
-      Serial.write(fillBits);
-      Serial.write(fillBits);
-      Serial.write(13); //cr
-      Serial.flush();
-    }
-    else /* debug / csv style msg */
-  /*  {
-      Serial.print(dacOut);
-      Serial.write(',');
-      Serial.print(vOut);
-      Serial.write(',');
-      Serial.println(iIn);
-    }
-
-    PS_startADC = false;
-    tScratch = micros() - tScratch;
-    //Serial.println(tScratch);
-  }
-  */
  
   //WQM_startADC flag set  (set from interrupt)
   if (WQM_startADC) {
@@ -504,21 +498,19 @@ boolean checkParams (int e, int np, long * par) {
 }
 
 /*
-
 */
 /*
-
 */
 //Add error prefix text to message and send to user
 size_t sendError(String s) {
   //return 0;
-  return Serial.println(String("Error: " + s));
+  return Serial_BT.println(String("Error: " + s));
 }
 
 //Add info prefix text to message and send to user
 size_t sendInfo(String s) {
   //return 0;
-  return Serial.println(String("Info: " + s));
+  return Serial_BT.println(String("Info: " + s));
 }
 
 
@@ -543,7 +535,7 @@ float calcOutput(unsigned long ti, unsigned int c) {
     vout = 0.0;
   }
   timeEx = micros() - timeEx;
-  //Serial.println(timeEx);
+  //Serial_BT.println(timeEx);
   return vout;
 }
 
@@ -569,14 +561,13 @@ uint16_t scaleOutput(float in) {
     }
   }
   timeEx = micros() - timeEx;
-  //Serial.println(timeEx);
+  //Serial_BT.println(timeEx);
   return scaled;
 }
 
 /* Calculate current experiment interval and cycle based on experiment time
     if interval is a exp. cycle interval, set global var tInt
     reset syncADCcomplete on new cycle
-
     TODO this will probably need to be adjusted when DPV is added as there will be many
     cycles per scan, modify to check # of scans and cycles before marking experiment complete,
     and increment scans as appropriate (after every two cycles for CV)
@@ -610,7 +601,7 @@ void calcInterval(unsigned long t) {
         //new interval, reset sync ADC
         syncADCcompleteFWD = false;
         syncADCcompleteREV = false;
-        if (prevInterval == INTERVAL_EXP2) Serial.println("S"); //send new scan char, TODO: update when DPV added
+        if (prevInterval == INTERVAL_EXP2) Serial_BT.println("S"); //send new scan char, TODO: update when DPV added
       }
       currInterval = INTERVAL_EXP1;
     } else {
@@ -619,7 +610,7 @@ void calcInterval(unsigned long t) {
     }
   }
   timeEx = micros() - timeEx;
-  //Serial.println(timeEx);
+  //Serial_BT.println(timeEx);
 }
 
 
@@ -664,22 +655,6 @@ void startTimerADC()
 /* Start timer used for to trigger interrupt for DAC conversion
     Timer preload/prescalers based on desired DAC output rate
 */
-void startTimerDAC()
-{
-  // initialize timer2 (DAC interrupt)
-  TCCR2A = 0;
-  TCCR2B = 0;
-
-  // Set timer1_counter to the correct value for our interrupt interval
-  timer2_preload = 131;   // preload timer 256-16MHz/256/500Hz
-
-  TCCR2B |= (1 << CS22);
-  TCCR2B |= (1 << CS21);    // 256 prescaler
-  TIMSK2 |= (1 << TOIE2);   // enable timer overflow interrupt
-  TCNT2 = timer2_preload;   // preload timer
-
-}
-
 // Stops timer 1 and timer 2, disables interrupts
 void stopTimers()
 {
@@ -707,53 +682,9 @@ void flashLed(byte n, unsigned int d) {
 }
 
 
-//Select feedback resistance based on gain selection (0-7)
-
-void setGain(byte n) {
-  //Set feedback resistance based on selection
-  switch (n / 2)
-  {
-    case 0:
-      //NO1, RG = RG1
-      rGain = RGAIN1;
-      digitalWrite(PS_MUX0, 0);
-      digitalWrite(PS_MUX1, 0);
-      break;
-    case 1:
-      //NO2, RG = RG2
-      rGain = RGAIN2;
-      digitalWrite(PS_MUX0, 1);
-      digitalWrite(PS_MUX1, 0);
-      break;
-    case 2:
-      //NO3, RG = RG3
-      rGain = RGAIN3;
-      digitalWrite(PS_MUX0, 0);
-      digitalWrite(PS_MUX1, 1);
-      break;
-    case 3:
-      //NO3, RG = RG4
-      rGain = RGAIN4;
-      digitalWrite(PS_MUX0, 1);
-      digitalWrite(PS_MUX1, 1);
-      break;
-    default:
-      //Invalid selection
-      programFail(3);
-      break;
-  }
-  if (n % 2) {
-    //n = 1,3,5, or 7
-    //PS_adc1.setGain(GAIN_SIXTEEN);
-    rGain = rGain * 4;
-  } else {
-    //n = 0,2,4 or 6
-    //PS_adc1.setGain(GAIN_FOUR);// set PGA gain to 4 (LSB=0.03125 mV, FSR=+/-1.048)
-  }
-}
 
 void startExperiment() {
-  printExp();//TODO: temp
+
   flashLed(4, 150);
   sendInfo("Starting Experiment");
   tExpStart = micros();
@@ -796,7 +727,6 @@ void programFail(byte code) {
     startTimerADC();
   }
   void getMeasurementsWQM() {
-
     // read from the ADC, and obtain a sixteen bits integer as a result
     if (WQM_Present) {
       WQM_adc1_diff_2_3 = WQM_adc1.readADC_Differential_2_3();
@@ -826,28 +756,31 @@ void programFail(byte code) {
    // voltage_alkalinity = WQM_adc2_diff_2_3 * 0.0625 / 0.0255; // in mV
   }
 
+
   //Send WQM meas. values over serial port
   void sendValues() {
 
     // Send data to Serial port
-    Serial.print(" ");
-   // Serial.print(V_temp, 4);
-    //Serial.print(" ");
-    //Serial.print(voltage_pH, 4);
-    //Serial.print(" ");
-    Serial.print(current_Cl, 4);
-    Serial.print(" ");
-    //Serial.print(voltage_alkalinity, 4);  //Make changes in app to read the proper order #TODO
-    //Serial.print(" ");
-    Serial.print((float)switchTimeACC / 1000.0, 1);  //Turns off the switch for free chlorine
-    Serial.print(" ");
+  //  Serial_BT.print(V_temp, 4);
+   // Serial_BT.print(" ");
+    //Serial_BT.print(voltage_pH, 4);
+    //Serial_BT.print(" ");
+    //Serial_BT.print(current_Cl, 4);
+    Serial_BT.print(fVoltageAdc,2);
+    Serial_BT.print("\t");
+    Serial_BT.print(WQM_adc1_diff_2_3);
+    Serial_BT.print("\t");
+    Serial_BT.print(current_Cl, 2);  //Make changes in app to read the proper order #TODO
+    Serial_BT.print("\t");
+    //Serial_BT.print((float)switchTimeACC / 1000.0, 1);  //Turns off the switch for free chlorine
+    //Serial_BT.print(" ");
     if (ClSwState) {
-      Serial.print("1");
+      Serial_BT.print("1");
     } else {
-      Serial.print("0");
+      Serial_BT.print("0");
     }
-    Serial.print(" ");
-    Serial.print("\n");
+    Serial_BT.print(" ");
+    Serial_BT.print("\n");
   }
 
   //Set free Cl switch ON or OFF

@@ -7,18 +7,12 @@
 #define WQM_ClSwEn 5
 #define WQM_BrdPresent 11
 
-#define BT_RX 2
-#define BT_TX 3
-
-
 #define PS_LED1 6
 #define PS_LED2 7
 #define PS_MUX0 8
 #define PS_MUX1 9
 #define PS_WE_SwEn 10
 #define PS_BrdPresent 12
-
-
 
 #define MB_LED 13
 #define EXT_LED 14
@@ -143,8 +137,8 @@
     boolean setConfig (int experiment, long * par);
     size_t sendError(String s);
     size_t sendInfo(String s);
-    float calcOutput(unsigned long ti, unsigned int c);
     uint16_t scaleOutput(float in);
+    float calcOutput(unsigned long ti, unsigned int c);
     void calcInterval(unsigned long t);
     void writeDAC(uint16_t value);
     void startTimerADC(void);
@@ -156,11 +150,7 @@
     void startExperiment(void);
     void finishExperiment(void);
     void programFail(byte code);
-    void clearExp(void);
-    void defLSVExp(void);
-    void defCVExp(void);
-    void defCVExp(void);
-    void printExp(void);
+    
     //Comms functions
     //void print(void);
     //void println(void);
