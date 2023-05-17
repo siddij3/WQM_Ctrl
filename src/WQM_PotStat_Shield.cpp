@@ -7,54 +7,6 @@
 //Project files
 #include "WQM_PotStat_Shield.h"
 
-//TODO: Define DPV parameters, set up experiment, find use for PS leds
-
-/*
-   PotStat command example:
-   <R%SR:60%G:2%E:1%EP:100,100,0,0,0,-200,800,100,3,%/>
-
-   '<' = Command start char
-   'R' = Run experiment
-   %SR:# = Sample rate, integer between MIN_SAMPLE_RATE and MAX_SAMPLE_RATE
-   %G:# = Gain Setting (0-7): Determines TIA feedback resistance and ADC PGA setting:
-
-   0: RG = 500, PGA = 4X, 2000uA
-   1: RG = 500, PGA = 16X, 500uA
-   2: RG = 10k, PGA = 4X, 100uA
-   3: RG = 10k, PGA = 16X, 25uA
-   4: RG = 200k, PGA = 4X, 5uA
-   5: RG = 200k, PGA = 16X, 1.25uA
-   6: RG = 4M, PGA = 4X, 250nA
-   7: RG = 4M, PGA = 16X, 63nA
-
-   %E:# = Experiment (1 or 2), 1 = CSV/LSV 2 = DPV (only CSV currently configured)
-
-   %EP:#,#,...#, = Experiment parameters, varies by selected experiment
-
-   CSV:
-   P0 = Cleaning time
-   P1 = Cleaning potential
-   P2 = Deposition time
-   P3 = Deposition potential
-   P4 = Start Voltage, mV
-   P5 = Vertex 1, mV
-   P6 = Vertex 2, mV
-   P7 = Slope, mV/S
-   P8 = # of scans
-
-   DPV:
-   P0 = Cleaning time
-   P1 = Cleaning potential
-   P2 = Deposition time
-   P3 = Deposition potential
-   P4 = Start/Initial (mV)
-   P5 = Stop/Final (mV)
-   P6 = Step, mV
-   P7 = Pulse Amplitude, mV
-   P8 = Pulse Width
-   P9 = Pulse Period
-*/
-
 /* IO
    Name Pin Function
    WQM:
@@ -89,10 +41,11 @@ boolean WQM_Present = false; //WQM Shield Present
 // GND  <-->  GND
 // TxD  <-->  pin D2
 // RxD  <-->  pin D3
+//SoftwareSerial mySerial (rxPin, txPin);
 SoftwareSerial Serial_BT(2,3);
 
 // WQM Variables
-Adafruit_ADS1115 WQM_adc1(0x49);  // THIS IS THE ONE
+Adafruit_ADS1115 WQM_adc1(0x48);  // THIS IS THE ONE
 //Adafruit_ADS1115 WQM_adc2(0x49);
 
 bool ClSwState = false;
@@ -217,75 +170,49 @@ void setup() {
   //WQM board present input
   pinMode(WQM_BrdPresent, INPUT_PULLUP);
 
-  //PotStat board present input
- // pinMode(PS_BrdPresent, INPUT_PULLUP);
-
   delay(250);
 
   //Check for boards present
   WQM_Present =  true;//digitalRead(WQM_BrdPresent) ? false : true;
- // PS_Present = digitalRead(PS_BrdPresent) ? false : true;
 
   delay(5000);
   //Initialize Serial port - setup BLE shield
-    Serial_BT.begin(9600);
-    while (!Serial) {
+    Serial.begin(9600);
+    //while (!Serial) {
+     // Serial.println("Master Baud Rate: = 9600");
        // wait for serial port to connect. Needed for native USB port only
-    }
-    Serial_BT.println("Master Baud Rate: = 9600");
-    Serial_BT.println("Setting BLE shield comms settings, name/baud rate(115200)");
+    //}
+    Serial.println("Master Baud Rate: = 9600");
+    Serial.println("Setting BLE shield comms settings, name/baud rate(115200)");
     delay(500);
-    Serial_BT.print("AT+NAMEIMWQMS"); //Set board name
+    Serial.print("AT+NAMEIMWQMS"); //Set board name
     delay(250);
-    Serial_BT.print("AT+BAUD4"); //Set baud rate to 115200 on BLE Shield
+    Serial.print("AT+BAUD4"); //Set baud rate to 115200 on BLE Shield
     delay(250);
-    Serial_BT.println();
-    Serial_BT.println("Increasing MCU baud rate to 115200");
+    Serial.println();
+    Serial.println("Increasing MCU baud rate to 115200");
     delay(500);
-    Serial_BT.begin(115200);
+    Serial.begin(115200);
     delay(200);
-    Serial_BT.println("Master Baud Rate: = 115200");
+    Serial.println("Master Baud Rate: = 115200");
 
   //Initialize I2C
   Wire.begin(); //Start I2C
   Wire.setClock(400000L);
 
-/*
-  if (PS_Present) {
-    //Setup PotStat outputs
-    //Gain select outputs
-    pinMode(PS_MUX0, OUTPUT);
-    pinMode(PS_MUX1, OUTPUT);
-    //PotStat LEDs
-    pinMode(PS_LED1, OUTPUT);
-    pinMode(PS_LED2, OUTPUT);
-    //WE digital switch enable
-    pinMode(PS_WE_SwEn, OUTPUT);
-    digitalWrite(PS_LED1, ON);
-    digitalWrite(PS_LED2, ON);
-    digitalWrite(PS_WE_SwEn, ON); //todo: update to only turn on during experiment
-    PS_adc1.begin();
-    //default to gain range 2 (10k, 4X PGA gain)
-    setGain(2);
-    // Reset DAC output
-    writeDAC(DACVAL0); //MAX5217
-    clearExp(); //clear experiment config
-    defCVExp(); //set default exp config
-    sendInfo("PotStat Setup complete");
-  } else {
-    sendInfo("No PotStat board detected");
-  }*/
+
   if (WQM_Present) {
     //Setup WQM outputs
     //WQM LED
     pinMode(WQM_LED, OUTPUT);
+
     //Free Cl digital switch enable
     pinMode(WQM_ClSwEn, OUTPUT);
     wqm_led(ON);
     WQM_adc1.begin();
     //WQM_adc2.begin();
     WQM_adc1.setGain(GAIN_TWO); // set PGA gain to 2 (LSB=0.0625 mV, FSR=2.048)
-   // WQM_adc2.setGain(GAIN_FOUR); // set PGA gain to 4 (LSB=0.03125 mV, FSR=1.024)
+
     sendInfo("WQM Setup complete");
     //Run WQM only
     delay(1000);
@@ -341,70 +268,11 @@ ISR(TIMER1_OVF_vect)        // interrupt service routine
 /*
  * Main program execution loop
  * 1. Calculate and start DAC conversion if flag set high (interrupt)
- * 2. Start potentiostat ADC conversion and process result if flag set high
- * 3. Start WQM ADC conversion and process resul if flag set high (interrupt)
- * 4. Receive and respond to exeternal serial comms (Start/Stop experiment)
+ * 2. Start WQM ADC conversion and process resul if flag set high (interrupt)
+ * 3. Receive and respond to exeternal serial comms (Start/Stop experiment)
  */
 void loop()
 {
-  //startDAC flag set (set from interrupt)
-  if (startDAC) {
-    tScratch = micros(); //track execution time
-    //calculate experiment time (time since exp. start)
-    tExp = micros() - tExpStart;
-    calcInterval(tExp); //calculate current interval, also currCycle and tInt
-
-    if (!samplingStarted  && !e.syncSamplingEN && (currInterval > INTERVAL_DEP) && (currInterval < INTERVAL_DN)) {
-      //start adc interrupt timer only after deposition period
-      startTimerADC();
-    }
-
-    //Check if experiment not complete
-    if (currInterval < INTERVAL_DN) {
-      //calculate voltage output
-
-      vOut = (float)calcOutput(tInt, currCycle);
-      dacOut = scaleOutput(vOut);
-      if (dacOut >= 0 && dacOut <= 65535) {
-        long tdac = micros();
-        tdac = micros() - tdac;
-        //Serial.print("Set DAC et: ");
-        //Serial.println(tdac);
-      } else {
-        sendError("DAC out of range");
-        //dac.setVoltage(DACVAL0, false);
-        programFail(4);
-      }
-
-      // Check sync sampling (DPV/SWV)
-      // FWD sample takes place at end of 1st interval
-      if (e.syncSamplingEN && !syncADCcompleteFWD && (tInt >= (e.tSwitch - SYNC_OFFSET)) && (tInt < e.tSwitch)) {
-        //sample ADC
-       // PS_startADC = true;
-        syncADCcompleteFWD = true;
-      }
-      // REV sample takes place at end of 2nd interval
-      if (e.syncSamplingEN && !syncADCcompleteREV && (tInt >= (e.tCycle - SYNC_OFFSET))) {
-        //sample ADC
-       // PS_startADC = true;
-        syncADCcompleteREV = true;
-      }
-
-    } else {
-      //experiment completed
-      Serial_BT.println("no");
-      finishExperiment();
-      sendInfo("Experiment Complete");
-    }
-    startDAC = false;
-
-    //execution time:
-    tScratch = micros() - tScratch;
-    //Serial_BT.print("Start DAC Total et: ");
-    //Serial_BT.println(tScratch);
-  }
-  
-
  
   //WQM_startADC flag set  (set from interrupt)
   if (WQM_startADC) {
@@ -421,9 +289,6 @@ void loop()
     WQM_startADC = false;
     digitalWrite(EXT_LED,ClSwState);
   }
-
-
-
 }
 /*
  * FUNCTIONS
@@ -434,185 +299,24 @@ void loop()
  *
  *  returns: true if successful, false if invalid / non-numeric char is in array
  */
-boolean convInt(long * vptr, char *arr, int startIndex, int stopIndex) {
-  long scratch = 0;
-  if (startIndex > stopIndex) return false;
-  long multiplier = 1;
-  //iterate in reverse order through array elements
-  for (int i = stopIndex; i >= startIndex; i--) {
-    //check if char is a number/digit 0-9
-    if (isNum(arr[i])) {
-      //convert to long, multiply by 10^iteration and add to total
-      scratch = scratch + (long)(arr[i] - '0') * multiplier;
-      multiplier = multiplier * 10;
-    } else if (i == startIndex && arr[i] == '-') {
-      //if leading char is minus sign, negate the total
-      scratch = scratch * -1;
-    } else {
-      //invalid / non-numeric char
-      return false;
-    }
-  }
-  *vptr = scratch;
-  return true;
-}
 
 //Check if char represents a number
 boolean isNum(char c) {
   return (c >= 0x30 && c <= 0x39);
 }
 
-/*
- * Checks if experiment parameters are within max/min limits
- *
- * Checks if parameters are within experiment specific limits, if applicable
- *
- * returns: true if successful
- */
-boolean checkParams (int e, int np, long * par) {
-  if ((e != EXP_CSV) && (e != EXP_DPV)) return false; // invalid experiment
-  if (np != PARAMS_REQD[e]) return false; // number of supplied parameters not equal to required parameters for selected exp
 
-  //Check if supplied parameters within constant limits
-  for (int i = 0; i < np; i++) {
-    if (par[i] < EXP_LIMITS[e][i][0]) {
-      sendError("Parameter out of range (below min)");
-      return false;
-    } else if (par[i] > EXP_LIMITS[e][i][1]) {
-      sendError("Parameter out of range (above max)");
-      return false;
-    }
-  }
-
-  // Check if parameters within experiment specific limits
-
-  switch (e) {
-    case EXP_CSV:
-      // TODO
-      break;
-    case EXP_DPV:
-      // TODO Pulse period > pulse width, experiment < 70 min, stop voltage > start voltage, stop voltage + amplitude < 1500 mv
-      break;
-  }
-  return true;
-}
-
-/*
-*/
-/*
-*/
 //Add error prefix text to message and send to user
 size_t sendError(String s) {
   //return 0;
-  return Serial_BT.println(String("Error: " + s));
+  return Serial.println(String("Error: " + s));
 }
 
 //Add info prefix text to message and send to user
 size_t sendInfo(String s) {
   //return 0;
-  return Serial_BT.println(String("Info: " + s));
+  return Serial.println(String("Info: " + s));
 }
-
-
-/* Calculate output voltage (float) based on current interval (global var),
-    experiment interval time (ti), current cycle (c), and current
-    experiment configuration (global var)
-*/
-float calcOutput(unsigned long ti, unsigned int c) {
-  float vout;
-  unsigned long timeEx = micros();
-  if (currInterval == INTERVAL_CLEAN) {
-    vout = e.vClean;
-  } else if (currInterval == INTERVAL_DEP) {
-    vout = e.vDep;
-  } else if (currInterval == INTERVAL_EXP1) {
-    //in active experiment region, 1st interval
-    vout = e.vStart[0] + e.vSlope[0] * (float)ti + (float)c * e.offset;
-  } else if (currInterval == INTERVAL_EXP2) {
-    //in 2nd interval
-    vout = e.vStart[1] + e.vSlope[1] * (float)(ti - e.tSwitch) + (float)c * e.offset;
-  } else {
-    vout = 0.0;
-  }
-  timeEx = micros() - timeEx;
-  //Serial_BT.println(timeEx);
-  return vout;
-}
-
-/* Scales output from float (-1.5 <= in <= 1.5) to uint16_t for DAC output (0 to 65535)
-*/
-uint16_t scaleOutput(float in) {
-  uint16_t scaled;
-  unsigned long timeEx = micros();
-  if (in >= 1.5) {
-    //desired output out of range (>1.5V)
-    //scaled = 4095;
-    scaled = 65535;
-  } else if (in <= -1.5) {
-    //desired output out of range (<-1.5V)
-    scaled = 0;
-  } else {
-    //desired output in range, scale
-    long inVal = (long)((in + 1.5) * 21845000.0); // add offset, scale (*1635), convert to long
-    scaled = inVal / 1000;
-    if (inVal % 1000 >= 500) {
-      //round up
-      scaled += 1;
-    }
-  }
-  timeEx = micros() - timeEx;
-  //Serial_BT.println(timeEx);
-  return scaled;
-}
-
-/* Calculate current experiment interval and cycle based on experiment time
-    if interval is a exp. cycle interval, set global var tInt
-    reset syncADCcomplete on new cycle
-    TODO this will probably need to be adjusted when DPV is added as there will be many
-    cycles per scan, modify to check # of scans and cycles before marking experiment complete,
-    and increment scans as appropriate (after every two cycles for CV)
-*/
-void calcInterval(unsigned long t) {
-  byte prevInterval = currInterval;
-  unsigned long timeEx = micros();
-  if (t < e.tClean) {
-    currInterval = INTERVAL_CLEAN;
-    tInt = 0;
-    currCycle = -1;
-  }
-  else if (t < (e.tClean + e.tDep)) {
-    currInterval = INTERVAL_DEP;
-    tInt = 0;
-    currCycle = -1;
-  }
-  else {
-    //in active experiment region
-    //determine current cycle
-    currCycle = (t - e.tClean - e.tDep) / e.tCycle;
-    //calc interval time
-    tInt = (t - (e.tClean + e.tDep) + e.tOffset) % e.tCycle;
-    if (currCycle >= e.cycles) {
-      //experiment complete
-      currInterval = INTERVAL_DN;
-    }
-    else if (tInt < e.tSwitch) {
-      //in 1st interval
-      if (prevInterval != INTERVAL_EXP1) {
-        //new interval, reset sync ADC
-        syncADCcompleteFWD = false;
-        syncADCcompleteREV = false;
-        if (prevInterval == INTERVAL_EXP2) Serial_BT.println("S"); //send new scan char, TODO: update when DPV added
-      }
-      currInterval = INTERVAL_EXP1;
-    } else {
-      //in 2nd interval
-      currInterval = INTERVAL_EXP2;
-    }
-  }
-  timeEx = micros() - timeEx;
-  //Serial_BT.println(timeEx);
-}
-
 
 
 /* Start timer used for to trigger interrupt for ADC conversion
@@ -681,10 +385,7 @@ void flashLed(byte n, unsigned int d) {
   }
 }
 
-
-
 void startExperiment() {
-
   flashLed(4, 150);
   sendInfo("Starting Experiment");
   tExpStart = micros();
@@ -726,18 +427,13 @@ void programFail(byte code) {
     expStarted = WQM_EXP_RUNNING;
     startTimerADC();
   }
+
   void getMeasurementsWQM() {
     // read from the ADC, and obtain a sixteen bits integer as a result
     if (WQM_Present) {
       WQM_adc1_diff_2_3 = WQM_adc1.readADC_Differential_2_3();
-     // delay(5);
-     // WQM_adc2_diff_0_1 = WQM_adc2.readADC_Differential_0_1();
       delay(5);
-    //  WQM_adc1_diff_0_1 = WQM_adc1.readADC_Differential_0_1();
-    //  delay(5);
-    //  WQM_adc2_diff_2_3 =  WQM_adc2.readADC_Differential_2_3();
 
-   
     } else {
       //Simulated ADC signals for when not connected to WQM board (temp) (fudges random data)
     //  WQM_adc1_diff_0_1 = 2000 + random(100);
@@ -746,41 +442,34 @@ void programFail(byte code) {
       } else {
         WQM_adc1_diff_2_3 = 0;
       }
-      //WQM_adc2_diff_0_1 = 2000 + random(100);
-     // WQM_adc2_diff_2_3 = 2000 + random(100);
 
     }
-    //voltage_pH = WQM_adc1_diff_0_1 * 0.0625; // in mV
+
     current_Cl = -WQM_adc1_diff_2_3 * 0.0625 / 0.0255; // in nA, feedback resistor = 500k
-    //V_temp = WQM_adc2_diff_0_1 * 0.03125; // in mV
-   // voltage_alkalinity = WQM_adc2_diff_2_3 * 0.0625 / 0.0255; // in mV
+
   }
 
 
   //Send WQM meas. values over serial port
   void sendValues() {
 
-    // Send data to Serial port
-  //  Serial_BT.print(V_temp, 4);
-   // Serial_BT.print(" ");
-    //Serial_BT.print(voltage_pH, 4);
-    //Serial_BT.print(" ");
-    //Serial_BT.print(current_Cl, 4);
-    Serial_BT.print(fVoltageAdc,2);
-    Serial_BT.print("\t");
-    Serial_BT.print(WQM_adc1_diff_2_3);
-    Serial_BT.print("\t");
-    Serial_BT.print(current_Cl, 2);  //Make changes in app to read the proper order #TODO
-    Serial_BT.print("\t");
-    //Serial_BT.print((float)switchTimeACC / 1000.0, 1);  //Turns off the switch for free chlorine
-    //Serial_BT.print(" ");
+
+    Serial.print(fVoltageAdc,2);
+    Serial.print("\t");
+    Serial.print(WQM_adc1_diff_2_3);
+    Serial.print("\t");
+    Serial.print(current_Cl, 2);  //Make changes in app to read the proper order #TODO
+    Serial.print("\t");
     if (ClSwState) {
-      Serial_BT.print("1");
+      Serial.print("1");
     } else {
-      Serial_BT.print("0");
+      Serial.print("0");
     }
-    Serial_BT.print(" ");
-    Serial_BT.print("\n");
+    Serial.print("\t");
+    Serial.print((float)switchTimeACC / 1000.0, 1);
+    Serial.print(" ");
+    Serial.print("\n");
+
   }
 
   //Set free Cl switch ON or OFF
