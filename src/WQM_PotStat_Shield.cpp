@@ -46,7 +46,7 @@ SoftwareSerial Serial_BT(2,3);
 
 // WQM Variables
 Adafruit_ADS1115 WQM_adc1(0x48);  // THIS IS THE ONE
-//Adafruit_ADS1115 WQM_adc2(0x49);
+Adafruit_ADS1115 WQM_adc2(0x49);
 
 bool ClSwState = false;
 
@@ -182,19 +182,19 @@ void setup() {
      // Serial.println("Master Baud Rate: = 9600");
        // wait for serial port to connect. Needed for native USB port only
     //}
-    Serial.println("Master Baud Rate: = 9600");
-    Serial.println("Setting BLE shield comms settings, name/baud rate(115200)");
+    Serial_BT.println("Master Baud Rate: = 9600");
+    Serial_BT.println("Setting BLE shield comms settings, name/baud rate(115200)");
     delay(500);
-    Serial.print("AT+NAMEIMWQMS"); //Set board name
+    Serial_BT.print("AT+NAMEIMWQMS"); //Set board name
     delay(250);
-    Serial.print("AT+BAUD4"); //Set baud rate to 115200 on BLE Shield
+    Serial_BT.print("AT+BAUD4"); //Set baud rate to 115200 on BLE Shield
     delay(250);
-    Serial.println();
-    Serial.println("Increasing MCU baud rate to 115200");
+    Serial_BT.println();
+    Serial_BT.println("Increasing MCU baud rate to 115200");
     delay(500);
-    Serial.begin(115200);
+    Serial_BT.begin(115200);
     delay(200);
-    Serial.println("Master Baud Rate: = 115200");
+    Serial_BT.println("Master Baud Rate: = 115200");
 
   //Initialize I2C
   Wire.begin(); //Start I2C
@@ -210,8 +210,9 @@ void setup() {
     pinMode(WQM_ClSwEn, OUTPUT);
     wqm_led(ON);
     WQM_adc1.begin();
-    //WQM_adc2.begin();
+    WQM_adc2.begin();
     WQM_adc1.setGain(GAIN_TWO); // set PGA gain to 2 (LSB=0.0625 mV, FSR=2.048)
+    WQM_adc2.setGain(GAIN_FOUR); // set PGA gain to 2 (LSB=0.0625 mV, FSR=2.048)
 
     sendInfo("WQM Setup complete");
     //Run WQM only
@@ -356,9 +357,25 @@ void startTimerADC()
   }
 }
 
+
 /* Start timer used for to trigger interrupt for DAC conversion
     Timer preload/prescalers based on desired DAC output rate
 */
+void startTimerDAC()
+{
+  // initialize timer2 (DAC interrupt)
+  TCCR2A = 0;
+  TCCR2B = 0;
+
+  // Set timer1_counter to the correct value for our interrupt interval
+  timer2_preload = 131;   // preload timer 256-16MHz/256/500Hz
+
+  TCCR2B |= (1 << CS22);
+  TCCR2B |= (1 << CS21);    // 256 prescaler
+  TIMSK2 |= (1 << TOIE2);   // enable timer overflow interrupt
+  TCNT2 = timer2_preload;   // preload timer
+
+}
 // Stops timer 1 and timer 2, disables interrupts
 void stopTimers()
 {
@@ -433,20 +450,32 @@ void programFail(byte code) {
     if (WQM_Present) {
       WQM_adc1_diff_2_3 = WQM_adc1.readADC_Differential_2_3();
       delay(5);
+      WQM_adc2_diff_0_1 = WQM_adc2.readADC_Differential_0_1();
+      delay(5);
+      WQM_adc1_diff_0_1 = WQM_adc1.readADC_Differential_0_1();
+      delay(5);
+      WQM_adc2_diff_2_3 =  WQM_adc1_diff_2_3;//WQM_adc2.readADC_Differential_2_3();
 
     } else {
       //Simulated ADC signals for when not connected to WQM board (temp) (fudges random data)
-    //  WQM_adc1_diff_0_1 = 2000 + random(100);
+      WQM_adc1_diff_0_1 = 2000 + random(100);
+
+
       if (ClSwState) {
         WQM_adc1_diff_2_3 = -2000 + random(100);
+        WQM_adc2_diff_2_3 = -2000 + random(100);
       } else {
         WQM_adc1_diff_2_3 = 0;
+        WQM_adc2_diff_2_3 = 0;
       }
+      WQM_adc2_diff_0_1 = 2000 + random(100);
+      WQM_adc2_diff_2_3 = 2000 + random(100);
 
     }
-
+    voltage_pH = WQM_adc1_diff_0_1 * 0.0625; // in mV
     current_Cl = -WQM_adc1_diff_2_3 * 0.0625 / 0.0255; // in nA, feedback resistor = 500k
-
+    V_temp = WQM_adc2_diff_0_1 * 0.03125; // in mV
+    voltage_alkalinity = WQM_adc2_diff_2_3 * 0.03125; // in mV
   }
 
 
@@ -454,21 +483,33 @@ void programFail(byte code) {
   void sendValues() {
 
 
-    Serial.print(fVoltageAdc,2);
-    Serial.print("\t");
-    Serial.print(WQM_adc1_diff_2_3);
-    Serial.print("\t");
-    Serial.print(current_Cl, 2);  //Make changes in app to read the proper order #TODO
-    Serial.print("\t");
+    Serial_BT.print(" ");
+    Serial_BT.print(V_temp, 4);
+    Serial_BT.print(" ");
+    Serial_BT.print(voltage_pH, 4);
+    Serial_BT.print(" ");
+    Serial_BT.print(current_Cl, 4);
+    Serial_BT.print(" ");
+    Serial_BT.print(voltage_alkalinity, 4);  //Make changes in app to read the proper order #TODO
+    Serial_BT.print(" ");
+    Serial_BT.print((float)switchTimeACC / 1000.0, 1);  //Turns off the switch for free chlorine
+    Serial_BT.print(" ");
+
+    // Serial_BT.print(fVoltageAdc,2);
+    // Serial_BT.print("\t");
+    // Serial_BT.print(WQM_adc1_diff_2_3);
+    // Serial_BT.print("\t");
+    // Serial_BT.print(current_Cl, 2);  //Make changes in app to read the proper order #TODO
+    Serial_BT.print("\t");
     if (ClSwState) {
-      Serial.print("1");
+      Serial_BT.print("1");
     } else {
-      Serial.print("0");
+      Serial_BT.print("0");
     }
-    Serial.print("\t");
-    Serial.print((float)switchTimeACC / 1000.0, 1);
-    Serial.print(" ");
-    Serial.print("\n");
+    Serial_BT.print("\t");
+    Serial_BT.print((float)switchTimeACC / 1000.0, 1);
+    Serial_BT.print(" ");
+    Serial_BT.print("\n");
 
   }
 
