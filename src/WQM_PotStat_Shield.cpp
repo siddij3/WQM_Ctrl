@@ -42,7 +42,7 @@ boolean WQM_Present = false; //WQM Shield Present
 // TxD  <-->  pin D2
 // RxD  <-->  pin D3
 //SoftwareSerial mySerial (rxPin, txPin);
-SoftwareSerial Serial_BT(2,3);
+SoftwareSerial Serial_BT(3,2);
 
 // WQM Variables
 Adafruit_ADS1115 WQM_adc1(0x48);  // THIS IS THE ONE
@@ -500,14 +500,11 @@ void programFail(byte code) {
     // Serial_BT.print(WQM_adc1_diff_2_3);
     // Serial_BT.print("\t");
     // Serial_BT.print(current_Cl, 2);  //Make changes in app to read the proper order #TODO
-    Serial_BT.print("\t");
     if (ClSwState) {
       Serial_BT.print("1");
     } else {
       Serial_BT.print("0");
     }
-    Serial_BT.print("\t");
-    Serial_BT.print((float)switchTimeACC / 1000.0, 1);
     Serial_BT.print(" ");
     Serial_BT.print("\n");
 
