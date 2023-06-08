@@ -131,10 +131,15 @@
     void receiveCmd(void);
     boolean parseRunCmd(char *cmd, int ncmd);
     int findSubstring(int start, char *sub, int nsub, char *str, int nstr);
+    boolean convInt(long * vptr, char *arr, int startIndex, int stopIndex);
     boolean isNum(char c);
+    boolean checkParams (int e, int np, long * par);
     boolean setConfig (int experiment, long * par);
     size_t sendError(String s);
     size_t sendInfo(String s);
+    float calcOutput(unsigned long ti, unsigned int c);
+    uint16_t scaleOutput(float in);
+    void calcInterval(unsigned long t);
     void writeDAC(uint16_t value);
     void startTimerADC(void);
     void startTimerDAC(void);
@@ -145,7 +150,11 @@
     void startExperiment(void);
     void finishExperiment(void);
     void programFail(byte code);
-    
+    void clearExp(void);
+    void defLSVExp(void);
+    void defCVExp(void);
+    void defCVExp(void);
+    void printExp(void);
     //Comms functions
     //void print(void);
     //void println(void);
